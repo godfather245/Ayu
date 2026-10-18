@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, NavLink, Route, Routes } from 'react-router-dom';
+import { BreathScreen } from '../features/breathing';
 import { CheckIn } from '../features/checkin';
 import { Lab, Probe } from '../features/lab';
 import { PulseCapture } from '../features/pulse';
@@ -54,6 +55,7 @@ export default function App() {
           <Route path="/lab" element={<Lab />} />
           <Route path="/lab/probe" element={<Probe />} />
           <Route path="/lab/pulse" element={<PulseCapture />} />
+          <Route path="/lab/breathing" element={<BreathScreen />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/about" element={<About />} />
           <Route path="*" element={<Home />} />

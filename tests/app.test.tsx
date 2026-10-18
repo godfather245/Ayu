@@ -86,3 +86,12 @@ describe('pulse lens auto-configuration', () => {
     expect(screen.getByRole('button', { name: 'Find best lens automatically' })).toBeTruthy();
   });
 });
+
+describe('breathing experiment screen', () => {
+  it('renders safety instructions and never shows a phone-derived flow value', () => {
+    at('/lab/breathing');
+    expect(screen.getByRole('button', { name: 'Start' })).toBeTruthy();
+    expect(screen.getByText(/does not estimate a flow value/)).toBeTruthy();
+    expect(screen.getByText(/Stop right away if you feel unwell/)).toBeTruthy();
+  });
+});
