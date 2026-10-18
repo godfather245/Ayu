@@ -1,2 +1,2 @@
-// report feature — built in a later phase. Writes only through src/data/repo.
-export {};
+export { default as ReportPage } from './ReportPage';
+export { buildReport } from './buildReport';
