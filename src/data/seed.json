@@ -1,0 +1,42 @@
+{
+  "_about": "Fictional 'Demo user' history. Every record is loaded with demo: true and shown with the DEMO DATA badge. Pulse and meter values are illustrative only — never real readings, never used on the Agreement screen or in pitch numbers. Times are day offsets before 'now' so the history always ends today.",
+  "context": [
+    { "daysAgo": 27, "time": "08:10", "tags": ["sleep_short"], "symptomTags": ["tired"], "sleepHours": 5.5, "caffeineServings": 2, "caffeineTime": "08:30", "activity": "resting" },
+    { "daysAgo": 26, "time": "21:40", "tags": ["stressed"], "symptomTags": ["headache"], "activity": "resting" },
+    { "daysAgo": 24, "time": "07:55", "tags": [], "symptomTags": [], "sleepHours": 7.5, "caffeineServings": 1, "activity": "resting" },
+    { "daysAgo": 23, "time": "18:20", "tags": ["exercised"], "symptomTags": [], "activity": "recently_exercised" },
+    { "daysAgo": 21, "time": "09:05", "tags": ["smoke_air", "outdoors"], "symptomTags": ["cough"], "sleepHours": 7, "activity": "resting", "note": "Hazy outside all day" },
+    { "daysAgo": 20, "time": "08:40", "tags": ["smoke_air"], "symptomTags": ["cough", "short_of_breath"], "activity": "resting" },
+    { "daysAgo": 19, "time": "22:15", "tags": ["smoke_air", "stressed"], "symptomTags": ["eye_strain"], "activity": "resting" },
+    { "daysAgo": 16, "time": "08:00", "tags": [], "symptomTags": [], "sleepHours": 8, "caffeineServings": 1, "activity": "resting" },
+    { "daysAgo": 15, "time": "12:30", "tags": ["travel"], "symptomTags": ["tired"], "activity": "other" },
+    { "daysAgo": 14, "time": "23:50", "tags": ["sleep_short", "caffeine"], "symptomTags": ["anxious"], "sleepHours": 4.5, "caffeineServings": 3, "caffeineTime": "21:00", "activity": "resting" },
+    { "daysAgo": 13, "time": "08:20", "tags": ["sleep_short"], "symptomTags": ["tired", "headache"], "sleepHours": 5, "caffeineServings": 3, "activity": "resting" },
+    { "daysAgo": 10, "time": "19:10", "tags": ["exercised"], "symptomTags": [], "activity": "recently_exercised" },
+    { "daysAgo": 9, "time": "08:05", "tags": [], "symptomTags": [], "sleepHours": 7.5, "caffeineServings": 1, "activity": "resting" },
+    { "daysAgo": 8, "time": "20:45", "tags": ["ill"], "symptomTags": ["cough", "tired"], "activity": "resting", "note": "Sore throat since afternoon" },
+    { "daysAgo": 7, "time": "09:30", "tags": ["ill", "med_change"], "symptomTags": ["cough"], "sleepHours": 9, "activity": "resting", "note": "Started cold medicine" },
+    { "daysAgo": 6, "time": "10:15", "tags": ["ill"], "symptomTags": ["tired"], "sleepHours": 8.5, "activity": "resting" },
+    { "daysAgo": 3, "time": "08:15", "tags": [], "symptomTags": [], "sleepHours": 7, "caffeineServings": 1, "activity": "resting" },
+    { "daysAgo": 2, "time": "22:30", "tags": ["stressed", "caffeine"], "symptomTags": ["eye_strain"], "caffeineServings": 2, "caffeineTime": "16:00", "activity": "resting" },
+    { "daysAgo": 1, "time": "08:25", "tags": ["sleep_short"], "symptomTags": ["tired"], "sleepHours": 5.5, "caffeineServings": 2, "activity": "resting" }
+  ],
+  "measurements": [
+    { "daysAgo": 27, "time": "08:15", "type": "pulse_ppg", "value": 66, "unit": "bpm", "quality": "usable", "qualityReasons": [] },
+    { "daysAgo": 24, "time": "08:00", "type": "pulse_ppg", "value": 64, "unit": "bpm", "quality": "usable", "qualityReasons": [] },
+    { "daysAgo": 21, "time": "09:10", "type": "pulse_ppg", "quality": "failed", "qualityReasons": ["finger_coverage", "low_signal"] },
+    { "daysAgo": 20, "time": "08:45", "type": "pulse_ppg", "value": 70, "unit": "bpm", "quality": "usable", "qualityReasons": [] },
+    { "daysAgo": 16, "time": "08:05", "type": "pulse_ppg", "value": 65, "unit": "bpm", "quality": "usable", "qualityReasons": [] },
+    { "daysAgo": 13, "time": "08:25", "type": "pulse_ppg", "value": 74, "unit": "bpm", "quality": "low", "qualityReasons": ["motion"] },
+    { "daysAgo": 9, "time": "08:10", "type": "pulse_ppg", "value": 67, "unit": "bpm", "quality": "usable", "qualityReasons": [] },
+    { "daysAgo": 7, "time": "09:35", "type": "pulse_ppg", "quality": "failed", "qualityReasons": ["dropped_frames"] },
+    { "daysAgo": 6, "time": "10:20", "type": "pulse_ppg", "value": 72, "unit": "bpm", "quality": "usable", "qualityReasons": [] },
+    { "daysAgo": 3, "time": "08:20", "type": "pulse_ppg", "value": 66, "unit": "bpm", "quality": "usable", "qualityReasons": [] },
+    { "daysAgo": 1, "time": "08:30", "type": "pulse_ppg", "value": 69, "unit": "bpm", "quality": "usable", "qualityReasons": [] },
+    { "daysAgo": 24, "time": "08:05", "type": "peak_flow_meter", "value": 480, "unit": "L/min", "quality": "usable", "qualityReasons": [] },
+    { "daysAgo": 20, "time": "08:50", "type": "peak_flow_meter", "value": 430, "unit": "L/min", "quality": "usable", "qualityReasons": [] },
+    { "daysAgo": 16, "time": "08:10", "type": "peak_flow_meter", "value": 470, "unit": "L/min", "quality": "usable", "qualityReasons": [] },
+    { "daysAgo": 9, "time": "08:15", "type": "peak_flow_meter", "value": 475, "unit": "L/min", "quality": "usable", "qualityReasons": [] },
+    { "daysAgo": 3, "time": "08:25", "type": "peak_flow_meter", "value": 465, "unit": "L/min", "quality": "usable", "qualityReasons": [] }
+  ]
+}

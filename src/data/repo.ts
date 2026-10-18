@@ -116,6 +116,44 @@ export function createRepo(dbName = 'ayu') {
       return deleted;
     },
 
+    /** Validates every record first, then writes all of them in one transaction (all or nothing). */
+    async addMany(records: { measurements?: Measurement[]; context?: ContextEntry[] }): Promise<void> {
+      const ms = records.measurements ?? [];
+      const cs = records.context ?? [];
+      ms.forEach((m) => assertValid(validateMeasurement(m)));
+      cs.forEach((c) => assertValid(validateContextEntry(c)));
+      const tx = (await db()).transaction(['measurements', 'context'], 'readwrite');
+      await Promise.all([
+        ...ms.map((m) => tx.objectStore('measurements').put(m)),
+        ...cs.map((c) => tx.objectStore('context').put(c)),
+      ]);
+      await tx.done;
+    },
+
+    /** Removes only records flagged demo: true; live entries are untouched. Returns how many were removed. */
+    async deleteDemo(): Promise<number> {
+      const tx = (await db()).transaction(STORES, 'readwrite');
+      let removed = 0;
+      for (const name of STORES) {
+        let cursor = await tx.objectStore(name).openCursor();
+        while (cursor) {
+          if (cursor.value.demo === true) {
+            await cursor.delete();
+            removed++;
+          }
+          cursor = await cursor.continue();
+        }
+      }
+      await tx.done;
+      return removed;
+    },
+
+    async hasDemo(): Promise<boolean> {
+      const d = await db();
+      const [ms, cs] = await Promise.all([d.getAll('measurements'), d.getAll('context')]);
+      return ms.some((m) => m.demo) || cs.some((c) => c.demo);
+    },
+
     async deleteAll(): Promise<void> {
       const d = await db();
       const tx = d.transaction(STORES, 'readwrite');
