@@ -60,6 +60,8 @@ export interface ContextEntry {
   symptomTags: string[];
   sleepHours?: number;
   caffeineMg?: number;
+  caffeineServings?: number; // check-in chip: 0, 1, 2, 3 (= 3 or more)
+  caffeineTime?: string; // "HH:MM" local, last caffeine
   activity?: 'resting' | 'recently_exercised' | 'other';
   note?: string;
   demo?: boolean;
@@ -73,6 +75,7 @@ export interface Baseline {
   windowEnd: string;
   validCount: number; // usable readings actually used
   value?: number; // absent when validCount < MIN_BASELINE
+  dataSet?: 'live' | 'demo'; // demo and live readings are never mixed
   createdAt: string;
 }
 
@@ -143,6 +146,8 @@ export function validateContextEntry(input: unknown): ValidationResult {
   if (!isStringArray(c.symptomTags)) errors.push('symptomTags must be a string array');
   if (c.sleepHours !== undefined && !(isFiniteNumber(c.sleepHours) && c.sleepHours >= 0)) errors.push('sleepHours must be >= 0');
   if (c.caffeineMg !== undefined && !(isFiniteNumber(c.caffeineMg) && c.caffeineMg >= 0)) errors.push('caffeineMg must be >= 0');
+  if (c.caffeineServings !== undefined && !(Number.isInteger(c.caffeineServings) && c.caffeineServings >= 0)) errors.push('caffeineServings must be a whole number >= 0');
+  if (c.caffeineTime !== undefined && !/^\d{2}:\d{2}$/.test(c.caffeineTime)) errors.push('caffeineTime must be HH:MM');
   if (c.activity !== undefined && !['resting', 'recently_exercised', 'other'].includes(c.activity)) errors.push('unknown activity');
   if (c.demo !== undefined && typeof c.demo !== 'boolean') errors.push('demo must be a boolean');
 

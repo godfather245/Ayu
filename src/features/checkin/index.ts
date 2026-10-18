@@ -1,2 +1,2 @@
-// checkin feature — built in a later phase. Writes only through src/data/repo.
-export {};
+export { default as CheckIn } from './CheckIn';
+export * from './tags';
