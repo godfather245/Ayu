@@ -687,3 +687,44 @@ label.inline {
   border-radius: 8px;
   padding: 8px;
 }
+
+/* ---- Pulse experiment ---- */
+
+.countdown {
+  font-size: 4rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.coverage {
+  font-weight: 700;
+  color: var(--fail);
+}
+
+.coverage.ok {
+  color: var(--accent);
+}
+
+.lens-picker > button {
+  min-width: 120px;
+  font-size: 0.85rem;
+}
+
+.live {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.live-bpm {
+  font-size: 2.4rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.wave {
+  width: 100%;
+  height: 70px;
+  display: block;
+}

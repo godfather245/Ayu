@@ -6,37 +6,72 @@ import type { Measurement } from '../../data/schema';
 import { EXPERIMENTAL_LABEL, MEASURE_LIMITATIONS } from '../../lib/copy';
 import { nowIso } from '../../lib/dates';
 import { browserSummary, deviceSummary } from '../../lib/device';
-import { CAPTURE_SECONDS, HRV_METHOD, METHOD, analyzeFrames, type Frame, type PulseResult } from './analyze';
+import { CAPTURE_SECONDS, HRV_METHOD, METHOD, THRESH, analyzeFrames, liveEstimate, type Frame, type LiveEstimate, type PulseResult } from './analyze';
+import { createCues, type Cues } from './cues';
+import { lensName, listBackLenses, resolveLens, saveLens, type Lens } from './lens';
 
 // Lab experiment: 60 s fingertip-over-camera capture → experimental average pulse and HRV estimates.
 // Only per-frame red/green means are kept in memory; no video or images are stored. Every attempt can be saved,
 // including failures, with an optional ECG reference for the same window.
 
-type Phase = 'idle' | 'starting' | 'capturing' | 'done' | 'error';
+type Phase = 'idle' | 'preview' | 'starting' | 'capturing' | 'done' | 'error';
 
 interface CaptureMeta {
   start: string;
   end: string;
   torch: boolean;
+  lens: string;
   settings: Record<string, unknown>;
 }
 
 const SAMPLE_W = 40;
 const SAMPLE_H = 30;
+const CUE_EVERY_S = 15;
 
 function parseReference(text: string): number | undefined {
   const v = Number(text.trim());
   return text.trim() !== '' && Number.isFinite(v) && v > 20 && v < 250 ? v : undefined;
 }
 
+const isCovered = (r: number, g: number) => r >= THRESH.minRed && g > 0 && r / g >= THRESH.minRedGreen;
+const LIVE_EVERY_MS = 250;
+
+function LiveView({ live }: { live: LiveEstimate | null }) {
+  const pts = live?.wave ?? [];
+  const points = pts.map((v, i) => `${((i / Math.max(1, pts.length - 1)) * 100).toFixed(2)},${(28 - v * 26).toFixed(2)}`).join(' ');
+  return (
+    <div className="live">
+      <p className="live-bpm">
+        {live?.bpm ?? '—'} <span className="small muted">bpm live</span>
+      </p>
+      <svg className="wave" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden>
+        {pts.length > 1 && <polyline points={points} fill="none" stroke="var(--accent)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />}
+      </svg>
+      <p className="muted small">
+        {!live || !live.covered
+          ? 'Lens not covered: keep your fingertip over the lens and flashlight'
+          : live.bpm === undefined
+            ? 'Finding your pulse…'
+            : 'Live number settles over time; the saved result uses the full 60 s.'}
+      </p>
+    </div>
+  );
+}
+
 export default function PulseCapture() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const cuesRef = useRef<Cues | null>(null);
   const runRef = useRef(0);
   const framesRef = useRef<Frame[]>([]);
   const [phase, setPhase] = useState<Phase>('idle');
-  const [progress, setProgress] = useState(0);
+  const [elapsedS, setElapsedS] = useState(0);
+  const [lenses, setLenses] = useState<Lens[] | null>(null);
+  const [lens, setLens] = useState<Lens | undefined>();
+  const [coverage, setCoverage] = useState<{ r: number; g: number; ok: boolean } | null>(null);
+  const [torchOn, setTorchOn] = useState<boolean | null>(null);
+  const [live, setLive] = useState<LiveEstimate | null>(null);
   const [result, setResult] = useState<PulseResult | null>(null);
   const [meta, setMeta] = useState<CaptureMeta | null>(null);
   const [ecg, setEcg] = useState('');
@@ -50,25 +85,147 @@ export default function PulseCapture() {
     if (videoRef.current) videoRef.current.srcObject = null;
   };
 
+  const disposeCues = () => {
+    cuesRef.current?.dispose();
+    cuesRef.current = null;
+  };
+
   // Camera and torch must turn off when leaving the screen or backgrounding the app.
   useEffect(() => {
-    const onVisibility = () => document.hidden && stopTracks();
+    const onVisibility = () => {
+      if (!document.hidden) return;
+      stopTracks();
+      disposeCues();
+    };
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', stopTracks);
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', stopTracks);
       stopTracks();
+      disposeCues();
     };
   }, []);
 
-  const cancel = () => {
+  /** Opens the chosen lens (exact device, so it can't switch mid-capture) and turns the torch on. */
+  const openCamera = async (target?: Lens) => {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: target
+        ? { deviceId: { exact: target.deviceId }, width: { ideal: 640 }, height: { ideal: 480 } }
+        : { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false,
+    });
+    const track = stream.getVideoTracks()[0];
+    let torch = false;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: true } as unknown as MediaTrackConstraintSet] });
+      torch = (track.getSettings() as Record<string, unknown>).torch === true;
+    } catch {
+      torch = false;
+    }
+    return { stream, track, torch };
+  };
+
+  const attach = async (stream: MediaStream) => {
+    streamRef.current = stream;
+    const video = videoRef.current!;
+    video.srcObject = stream;
+    await video.play();
+    const canvas = canvasRef.current!;
+    canvas.width = SAMPLE_W;
+    canvas.height = SAMPLE_H;
+    return { video, ctx: canvas.getContext('2d', { willReadFrequently: true })! };
+  };
+
+  const sample = (ctx: CanvasRenderingContext2D, video: HTMLVideoElement) => {
+    ctx.drawImage(video, 0, 0, SAMPLE_W, SAMPLE_H);
+    const px = ctx.getImageData(0, 0, SAMPLE_W, SAMPLE_H).data;
+    let r = 0;
+    let g = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      r += px[i];
+      g += px[i + 1];
+    }
+    const n = px.length / 4;
+    return { r: r / n, g: g / n };
+  };
+
+  /** Live preview of one lens with torch on and a covered / not-covered indicator. */
+  const preview = async (target: Lens) => {
+    stopTracks();
+    const run = runRef.current;
+    setError(null);
+    setCoverage(null);
+    setTorchOn(null);
+    setPhase('preview');
+    try {
+      const { stream, torch } = await openCamera(target);
+      if (runRef.current !== run) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      setTorchOn(torch);
+      const { video, ctx } = await attach(stream);
+      let last = 0;
+      const loop = (now: number) => {
+        if (runRef.current !== run) return;
+        if (now - last > 250) {
+          last = now;
+          const { r, g } = sample(ctx, video);
+          setCoverage({ r: Math.round(r), g: Math.round(g), ok: isCovered(r, g) });
+        }
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+    } catch (e) {
+      stopTracks();
+      setError(e instanceof Error ? `${e.name}: ${e.message}` : String(e));
+      setPhase('error');
+    }
+  };
+
+  /** Lens labels are hidden until camera permission is granted, so ask once, then list. */
+  const openPicker = async () => {
+    setError(null);
+    try {
+      let found = await listBackLenses();
+      if (!found.length) {
+        const { stream } = await openCamera();
+        stream.getTracks().forEach((t) => t.stop());
+        found = await listBackLenses();
+      }
+      setLenses(found);
+      const chosen = resolveLens(found);
+      setLens(chosen);
+      if (chosen) await preview(chosen);
+    } catch (e) {
+      setError(e instanceof Error ? `${e.name}: ${e.message}` : String(e));
+      setPhase('error');
+    }
+  };
+
+  const pickLens = (l: Lens) => {
+    setLens(l);
+    saveLens({ deviceId: l.deviceId, label: l.label });
+    void preview(l);
+  };
+
+  const closePreview = () => {
     stopTracks();
     setPhase('idle');
-    setProgress(0);
+  };
+
+  const cancel = () => {
+    stopTracks();
+    disposeCues();
+    setPhase('idle');
+    setElapsedS(0);
   };
 
   const start = async () => {
+    // Cues must be created synchronously inside the tap so iOS allows audio.
+    disposeCues();
+    cuesRef.current = createCues();
     stopTracks();
     const run = runRef.current;
     framesRef.current = [];
@@ -76,65 +233,61 @@ export default function PulseCapture() {
     setResult(null);
     setMeta(null);
     setSaved(false);
-    setProgress(0);
+    setElapsedS(0);
+    setLive(null);
     setPhase('starting');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } },
-        audio: false,
-      });
+      let target = lens;
+      if (!target) {
+        const found = await listBackLenses();
+        target = resolveLens(found);
+      }
+      const { stream, track, torch } = await openCamera(target);
       if (runRef.current !== run) {
         stream.getTracks().forEach((t) => t.stop());
         return;
       }
-      streamRef.current = stream;
-      const track = stream.getVideoTracks()[0];
-      let torch = false;
-      try {
-        await track.applyConstraints({ advanced: [{ torch: true } as unknown as MediaTrackConstraintSet] });
-        torch = (track.getSettings() as Record<string, unknown>).torch === true;
-      } catch {
-        torch = false;
-      }
-      const video = videoRef.current!;
-      video.srcObject = stream;
-      await video.play();
+      const { video, ctx } = await attach(stream);
       if (runRef.current !== run) return;
 
-      const canvas = canvasRef.current!;
-      canvas.width = SAMPLE_W;
-      canvas.height = SAMPLE_H;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
       const startMs = performance.now();
       const startIso = nowIso();
       const hasRvfc = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
       const schedule = (cb: (now: number) => void) => (hasRvfc ? video.requestVideoFrameCallback((now) => cb(now)) : requestAnimationFrame(cb));
+      let nextCue = CUE_EVERY_S;
+      let shownS = -1;
+      let lastLive = 0;
       setPhase('capturing');
 
       const onFrame = (now: number) => {
         if (runRef.current !== run) return;
-        ctx.drawImage(video, 0, 0, SAMPLE_W, SAMPLE_H);
-        const px = ctx.getImageData(0, 0, SAMPLE_W, SAMPLE_H).data;
-        let r = 0;
-        let g = 0;
-        for (let i = 0; i < px.length; i += 4) {
-          r += px[i];
-          g += px[i + 1];
+        framesRef.current.push({ t: now, ...sample(ctx, video) });
+        if (now - lastLive >= LIVE_EVERY_MS) {
+          lastLive = now;
+          setLive(liveEstimate(framesRef.current));
         }
-        const n = px.length / 4;
-        framesRef.current.push({ t: now, r: r / n, g: g / n });
-        const elapsed = now - startMs;
-        setProgress(Math.min(1, elapsed / (CAPTURE_SECONDS * 1000)));
-        if (elapsed < CAPTURE_SECONDS * 1000) {
+        const elapsed = (now - startMs) / 1000;
+        if (Math.floor(elapsed) !== shownS) {
+          shownS = Math.floor(elapsed);
+          setElapsedS(shownS);
+        }
+        if (elapsed >= nextCue && nextCue < CAPTURE_SECONDS) {
+          cuesRef.current?.tick();
+          nextCue += CUE_EVERY_S;
+        }
+        if (elapsed < CAPTURE_SECONDS) {
           schedule(onFrame);
           return;
         }
+        cuesRef.current?.done();
+        setTimeout(disposeCues, 1500);
         const res = analyzeFrames(framesRef.current);
         setMeta({
           start: startIso,
           end: nowIso(),
           torch,
-          settings: { ...(track.getSettings() as Record<string, unknown>), frameTiming: hasRvfc ? 'requestVideoFrameCallback' : 'requestAnimationFrame' },
+          lens: track.label,
+          settings: { ...(track.getSettings() as Record<string, unknown>), lens: track.label, frameTiming: hasRvfc ? 'requestVideoFrameCallback' : 'requestAnimationFrame' },
         });
         setResult(res);
         stopTracks();
@@ -143,6 +296,7 @@ export default function PulseCapture() {
       schedule(onFrame);
     } catch (e) {
       stopTracks();
+      disposeCues();
       setError(e instanceof Error ? `${e.name}: ${e.message}` : String(e));
       setPhase('error');
     }
@@ -203,6 +357,8 @@ export default function PulseCapture() {
   };
 
   const capturing = phase === 'starting' || phase === 'capturing';
+  const remaining = Math.max(0, CAPTURE_SECONDS - elapsedS);
+  const nextBuzz = Math.min(CAPTURE_SECONDS, (Math.floor(elapsedS / CUE_EVERY_S) + 1) * CUE_EVERY_S);
 
   return (
     <section className="stack">
@@ -213,29 +369,72 @@ export default function PulseCapture() {
       </div>
       <p className="muted small">{EXPERIMENTAL_LABEL}. Average resting pulse, plus a heart-rate variability estimate when the signal is very clean.</p>
 
-      {phase === 'idle' && (
+      {(phase === 'idle' || phase === 'preview') && (
+        <div className="card stack">
+          <div className="row between">
+            <h2>Lens</h2>
+            <span className="small">{lens ? lensName(lens.label) : 'Not chosen yet'}</span>
+          </div>
+          {phase === 'idle' && (
+            <button className="secondary" onClick={openPicker}>
+              {lens ? 'Change lens / check finger position' : 'Choose lens and check finger position'}
+            </button>
+          )}
+          {phase === 'preview' && lenses && (
+            <>
+              <p className="muted small">
+                Cover the flashlight and one lens with your fingertip. Try each lens until the check below turns green, then start.
+              </p>
+              <div className="segmented lens-picker" role="group" aria-label="Lens">
+                {lenses.map((l) => (
+                  <button key={l.deviceId} className={lens?.deviceId === l.deviceId ? 'on' : ''} aria-pressed={lens?.deviceId === l.deviceId} onClick={() => pickLens(l)}>
+                    {lensName(l.label)}
+                  </button>
+                ))}
+              </div>
+              {lens?.virtual && <p className="error small">This option switches between lenses by itself. Pick a single lens for a steady capture.</p>}
+              <p className={`coverage ${coverage?.ok ? 'ok' : ''}`}>
+                {coverage === null ? 'Starting camera…' : coverage.ok ? '✓ Lens covered, light coming through your finger' : '✗ Not covered yet: move your fingertip over the lens and flashlight'}
+              </p>
+              <p className="muted small">
+                Flashlight: {torchOn === null ? '…' : torchOn ? 'on' : 'off (this lens may not support it)'}
+                {coverage && ` · red ${coverage.r}, green ${coverage.g}`}
+              </p>
+              <button className="link" onClick={closePreview}>Close preview</button>
+            </>
+          )}
+        </div>
+      )}
+
+      <video ref={videoRef} className="probe-video" playsInline muted autoPlay hidden={!(capturing || phase === 'preview')} />
+      <canvas ref={canvasRef} hidden />
+
+      {(phase === 'idle' || phase === 'preview') && (
         <div className="card stack">
           <h2>Before you start</h2>
           <ul>
             <li>Sit and rest for a minute first, not right after exercise.</li>
-            <li>Gently cover the rear camera <strong>and</strong> the flashlight with one fingertip. Don't press hard.</li>
+            <li>Gently cover the lens <strong>and</strong> the flashlight with one fingertip. Don't press hard.</li>
             <li>Rest your hand on a table and stay still for {CAPTURE_SECONDS} seconds.</li>
+            <li>You'll feel a tap and hear a beep every {CUE_EVERY_S} s, and a double beep when it's done. Turn off silent mode to hear the beeps.</li>
           </ul>
           <p className="muted small">Only brightness numbers are kept while recording. No video or photos are saved.</p>
           <button className="big" onClick={start}>Start {CAPTURE_SECONDS} s capture</button>
         </div>
       )}
 
-      <video ref={videoRef} className="probe-video" playsInline muted autoPlay hidden={!capturing} />
-      <canvas ref={canvasRef} hidden />
-
       {capturing && (
-        <div className="card stack">
-          <p>{phase === 'starting' ? 'Starting camera…' : 'Hold still…'}</p>
+        <div className="card stack center">
+          <p className="countdown" aria-live="polite">
+            {phase === 'starting' ? '…' : remaining}
+            <span className="small muted"> s left</span>
+          </p>
+          <p>{phase === 'starting' ? 'Starting camera…' : 'Hold still'}</p>
+          {phase === 'capturing' && <LiveView live={live} />}
           <div className="meter" aria-label="Capture progress">
-            <div style={{ width: `${Math.round(progress * 100)}%` }} />
+            <div style={{ width: `${Math.round((elapsedS / CAPTURE_SECONDS) * 100)}%` }} />
           </div>
-          <p className="muted small">{Math.round(progress * CAPTURE_SECONDS)} / {CAPTURE_SECONDS} s</p>
+          {phase === 'capturing' && <p className="muted small">Next tap at {nextBuzz} s{lens ? ` · ${lensName(lens.label)}` : ''}</p>}
           <button className="secondary" onClick={cancel}>Cancel</button>
         </div>
       )}
@@ -243,7 +442,7 @@ export default function PulseCapture() {
       {phase === 'error' && (
         <div className="card stack">
           <p className="error">Camera could not start: {error}</p>
-          <button onClick={start}>Try again</button>
+          <button onClick={() => setPhase('idle')}>Back</button>
         </div>
       )}
 
@@ -274,6 +473,8 @@ export default function PulseCapture() {
             <dd>{result.cleanS} s of {result.durationS} s</dd>
             <dt>Frame rate</dt>
             <dd>{result.frameRateHz} fps · {Math.round(result.droppedRatio * 100)}% dropped</dd>
+            <dt>Lens</dt>
+            <dd>{meta ? lensName(meta.lens) : '—'}</dd>
             <dt>Flashlight</dt>
             <dd>{meta?.torch ? 'on' : 'off'}</dd>
           </dl>

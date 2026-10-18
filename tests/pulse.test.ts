@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeFrames, type Frame } from '../src/features/pulse/analyze';
+import { analyzeFrames, liveEstimate, type Frame } from '../src/features/pulse/analyze';
 import { agreement, blandAltmanPoints, typicalErrorOfEstimate } from '../src/lib/agreement-stats';
 
 // Synthetic fingertip captures: Gaussian pulse bumps on the green channel, sampled at ~30 fps with timestamp jitter.
@@ -175,5 +175,20 @@ describe('agreement stats', () => {
     expect(typicalErrorOfEstimate(pairs)).toBeGreaterThan(0);
     expect(typicalErrorOfEstimate(pairs.slice(0, 2))).toBeUndefined();
     expect(agreement([], 5)).toBeUndefined();
+  });
+});
+
+describe('liveEstimate', () => {
+  it('reports a provisional rate and a waveform from the last 10 s', () => {
+    const live = liveEstimate(synth({ bpm: 72, seconds: 15 }));
+    expect(live.covered).toBe(true);
+    expect(Math.abs(live.bpm! - 72)).toBeLessThanOrEqual(3);
+    expect(live.wave.length).toBeGreaterThan(50);
+    expect(Math.max(...live.wave)).toBeLessThanOrEqual(1);
+  });
+
+  it('shows no number until there is enough signal, or when the lens is uncovered', () => {
+    expect(liveEstimate(synth({ seconds: 4 })).bpm).toBeUndefined();
+    expect(liveEstimate(synth({ finger: false, seconds: 15 }))).toEqual({ covered: false, wave: [] });
   });
 });

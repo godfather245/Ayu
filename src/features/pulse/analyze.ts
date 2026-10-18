@@ -77,6 +77,46 @@ export const THRESH = {
 
 const round = (v: number, d = 0) => Math.round(v * 10 ** d) / 10 ** d;
 
+export interface LiveEstimate {
+  covered: boolean;
+  bpm?: number; // provisional, from the last few seconds only
+  wave: number[]; // last ~4 s of filtered signal, scaled 0–1, for display
+}
+
+const LIVE_WINDOW_S = 10;
+const LIVE_WAVE_S = 4;
+
+/** Lightweight running estimate for the live view. The saved result always comes from analyzeFrames on the full capture. */
+export function liveEstimate(frames: Frame[]): LiveEstimate {
+  if (frames.length < 10) return { covered: false, wave: [] };
+  const end = frames[frames.length - 1].t;
+  const recent = frames.filter((f) => f.t >= end - LIVE_WINDOW_S * 1000);
+  const spanS = (end - recent[0].t) / 1000;
+  const r = mean(recent.map((f) => f.r));
+  const g = mean(recent.map((f) => f.g));
+  const covered = r >= THRESH.minRed && g > 0 && r / g >= THRESH.minRedGreen;
+  if (!covered || spanS < 3 || recent.length < 10) return { covered, wave: [] };
+
+  const grid = resample(recent.map((f) => ({ t: f.t, v: f.g })));
+  const filt = smooth3(bandpass(detrend(grid.y, FS), FS));
+  const edge = FS / 2;
+  const core = filt.subarray(edge, filt.length - edge);
+  const tail = core.subarray(Math.max(0, core.length - LIVE_WAVE_S * FS));
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const v of tail) {
+    lo = Math.min(lo, v);
+    hi = Math.max(hi, v);
+  }
+  const wave: number[] = [];
+  for (let i = 0; i < tail.length; i += 4) wave.push(hi > lo ? (tail[i] - lo) / (hi - lo) : 0.5);
+
+  if (spanS < 6) return { covered, wave };
+  const times = findPeakTimesS(core, FS);
+  const m = pulseMetrics(intervals(times));
+  return { covered, wave, ...(m && times.length >= 5 ? { bpm: Math.round(m.bpm) } : {}) };
+}
+
 export function analyzeFrames(input: Frame[]): PulseResult {
   const frames = [...input].sort((a, b) => a.t - b.t);
   const empty: PulseResult = {
