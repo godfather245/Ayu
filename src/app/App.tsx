@@ -10,11 +10,13 @@ export default function App() {
         <Link to="/" className="brand">
           {APP_NAME}
         </Link>
+        <nav className="shell-nav">
+          <Link to="/lab/probe">Media probe</Link>
+        </nav>
       </header>
       <main className="shell-main">
         <Routes>
           <Route path="/" element={<Home />} />
-          {/* Hidden research route: not linked from the UI. */}
           <Route path="/lab/probe" element={<Probe />} />
           <Route path="*" element={<Home />} />
         </Routes>
