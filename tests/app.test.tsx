@@ -72,3 +72,10 @@ describe('app routes', () => {
     expect(screen.getByRole('button', { name: 'Delete my local data' })).toBeTruthy();
   });
 });
+
+describe('pulse experiment screen', () => {
+  it('renders the instructions and start button', () => {
+    at('/lab/pulse');
+    expect(screen.getByRole('button', { name: /Start 60 s capture/ })).toBeTruthy();
+  });
+});

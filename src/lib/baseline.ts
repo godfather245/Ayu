@@ -9,7 +9,7 @@ export const DEFAULT_N = 7;
 export const MIN_BASELINE = 3;
 export const WINDOW_DAYS = 28;
 
-export const UNIT_DECIMALS: Record<string, number> = { bpm: 0, 'L/min': 0, logMAR: 2, s: 1 };
+export const UNIT_DECIMALS: Record<string, number> = { bpm: 0, 'L/min': 0, logMAR: 2, s: 1, ms: 0 };
 
 export interface BaselineOptions {
   type: MeasurementType;

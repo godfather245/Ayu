@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, NavLink, Route, Routes } from 'react-router-dom';
 import { CheckIn } from '../features/checkin';
 import { Lab, Probe } from '../features/lab';
+import { PulseCapture } from '../features/pulse';
 import { ReportPage } from '../features/report';
 import { EntryList, Timeline } from '../features/timeline';
 import { APP_NAME, FOOTER_SHORT } from '../lib/copy';
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="/report" element={<ReportPage />} />
           <Route path="/lab" element={<Lab />} />
           <Route path="/lab/probe" element={<Probe />} />
+          <Route path="/lab/pulse" element={<PulseCapture />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/about" element={<About />} />
           <Route path="*" element={<Home />} />

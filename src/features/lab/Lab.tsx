@@ -30,7 +30,8 @@ export default function Lab() {
 
       <div className="card stack">
         <h2>Sensor experiments</h2>
-        <p className="muted small">Pulse, breathing, vision and blink-hold experiments are added here one at a time.</p>
+        <Link to="/lab/pulse" className="list-link">Pulse experiment: resting pulse + heart-rate variability (camera) ›</Link>
+        <p className="muted small">Breathing, vision and blink-hold experiments are added here one at a time.</p>
         <Link to="/lab/probe" className="list-link">Media probe: what this phone's camera and mic allow ›</Link>
       </div>
 

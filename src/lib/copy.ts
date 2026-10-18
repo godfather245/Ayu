@@ -53,6 +53,7 @@ export const qualityReasonText = (reasons: string[]) =>
 
 export const MEASURE_LABELS: Record<MeasurementType, string> = {
   pulse_ppg: 'Resting pulse estimate (camera)',
+  hrv_ppg: 'Heart-rate variability estimate (rMSSD, camera)',
   breath_audio: 'Breathing audio experiment',
   peak_flow_meter: 'Peak-flow meter reading',
   vision_logmar: 'Vision chart score (logMAR)',
@@ -62,6 +63,7 @@ export const MEASURE_LABELS: Record<MeasurementType, string> = {
 
 export const MEASURE_LIMITATIONS: Record<MeasurementType, string> = {
   pulse_ppg: 'Average rate only, from a phone camera. Not compared with a reference device unless a reference is listed.',
+  hrv_ppg: 'Beat-to-beat timing from a ~30 fps phone camera, so precision is limited; shown only for very clean captures. Not compared with a reference device unless a reference is listed.',
   breath_audio: 'Audio features only; no flow value is derived from the phone.',
   peak_flow_meter: 'Value read off a mechanical meter and typed in by hand.',
   vision_logmar: 'On-screen chart at a fixed distance; depends on calibration, lighting and distance.',

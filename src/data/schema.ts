@@ -6,6 +6,7 @@ export type Quality = 'usable' | 'low' | 'failed';
 
 export const MEASUREMENT_TYPES = [
   'pulse_ppg',
+  'hrv_ppg',
   'breath_audio',
   'peak_flow_meter',
   'vision_logmar',
@@ -14,7 +15,7 @@ export const MEASUREMENT_TYPES = [
 ] as const;
 export type MeasurementType = (typeof MEASUREMENT_TYPES)[number];
 
-export const UNITS = ['bpm', 'L/min', 'logMAR', 's'] as const;
+export const UNITS = ['bpm', 'L/min', 'logMAR', 's', 'ms'] as const;
 export type Unit = (typeof UNITS)[number];
 
 export const QUALITIES: readonly Quality[] = ['usable', 'low', 'failed'];

@@ -46,7 +46,7 @@ export function buildSeries(measurements: Measurement[]): MeasureSeries {
 }
 
 /** Measurement types present in the data, in a stable display order. */
-export const TYPE_ORDER: MeasurementType[] = ['pulse_ppg', 'peak_flow_meter', 'breath_audio', 'vision_logmar', 'blink_hold', 'manual'];
+export const TYPE_ORDER: MeasurementType[] = ['pulse_ppg', 'hrv_ppg', 'peak_flow_meter', 'breath_audio', 'vision_logmar', 'blink_hold', 'manual'];
 
 export const typesPresent = (ms: Measurement[]) => TYPE_ORDER.filter((t) => ms.some((m) => m.type === t));
 
