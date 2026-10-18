@@ -1,2 +1,3 @@
-// timeline feature — built in a later phase. Writes only through src/data/repo.
-export {};
+export { default as Timeline } from './Timeline';
+export { default as EntryList } from './EntryList';
+export { default as MeasureChart } from './MeasureChart';
