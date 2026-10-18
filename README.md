@@ -4,7 +4,7 @@ A phone-first personal health log: build your own baseline, log measurements and
 
 > Ayu is an experimental personal tracking prototype. It does not diagnose, treat, or rule out any condition, and its phone-based measurements may be inaccurate. Do not use it for medical decisions or delay care based on a reading. If you have urgent or concerning symptoms, seek appropriate medical care.
 
-**Deployed:** _TBD — add the HTTPS URL here_
+**Deployed:** https://ayu-dubhacks.web.app (Firebase Hosting; deploy with `npm run build && firebase deploy --only hosting`)
 
 Built during DubHacks '26 (Sat 12:30 PM – Sun 10:00 AM).
 
