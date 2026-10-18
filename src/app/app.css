@@ -728,3 +728,7 @@ label.inline {
   height: 70px;
   display: block;
 }
+
+.small-countdown {
+  font-size: 2.6rem;
+}

@@ -79,3 +79,10 @@ describe('pulse experiment screen', () => {
     expect(screen.getByRole('button', { name: /Start 60 s capture/ })).toBeTruthy();
   });
 });
+
+describe('pulse lens auto-configuration', () => {
+  it('offers the automatic lens test', () => {
+    at('/lab/pulse');
+    expect(screen.getByRole('button', { name: 'Find best lens automatically' })).toBeTruthy();
+  });
+});

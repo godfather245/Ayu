@@ -7,6 +7,7 @@ import { EXPERIMENTAL_LABEL, MEASURE_LIMITATIONS } from '../../lib/copy';
 import { nowIso } from '../../lib/dates';
 import { browserSummary, deviceSummary } from '../../lib/device';
 import { CAPTURE_SECONDS, HRV_METHOD, METHOD, THRESH, analyzeFrames, liveEstimate, type Frame, type LiveEstimate, type PulseResult } from './analyze';
+import { CAL_RECORD_MS, CAL_SETTLE_MS, rankLenses, scoreLensSample, type LensScore } from './calibrate';
 import { createCues, type Cues } from './cues';
 import { lensName, listBackLenses, resolveLens, saveLens, type Lens } from './lens';
 
@@ -14,7 +15,19 @@ import { lensName, listBackLenses, resolveLens, saveLens, type Lens } from './le
 // Only per-frame red/green means are kept in memory; no video or images are stored. Every attempt can be saved,
 // including failures, with an optional ECG reference for the same window.
 
-type Phase = 'idle' | 'preview' | 'starting' | 'capturing' | 'done' | 'error';
+type Phase = 'idle' | 'preview' | 'calibrating' | 'starting' | 'capturing' | 'done' | 'error';
+
+interface CalStep {
+  index: number;
+  total: number;
+  name: string;
+  stage: 'opening' | 'settling' | 'recording';
+}
+
+interface CalResult {
+  lens: Lens;
+  score: LensScore;
+}
 
 interface CaptureMeta {
   start: string;
@@ -72,6 +85,8 @@ export default function PulseCapture() {
   const [coverage, setCoverage] = useState<{ r: number; g: number; ok: boolean } | null>(null);
   const [torchOn, setTorchOn] = useState<boolean | null>(null);
   const [live, setLive] = useState<LiveEstimate | null>(null);
+  const [calStep, setCalStep] = useState<CalStep | null>(null);
+  const [calResults, setCalResults] = useState<CalResult[] | null>(null);
   const [result, setResult] = useState<PulseResult | null>(null);
   const [meta, setMeta] = useState<CaptureMeta | null>(null);
   const [ecg, setEcg] = useState('');
@@ -204,6 +219,96 @@ export default function PulseCapture() {
     }
   };
 
+  /** Stops the current stream without cancelling the run (used between lenses during auto-configuration). */
+  const releaseStream = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+  };
+
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const recordFor = (video: HTMLVideoElement, ctx: CanvasRenderingContext2D, ms: number, run: number) =>
+    new Promise<Frame[]>((resolve) => {
+      const frames: Frame[] = [];
+      const t0 = performance.now();
+      const hasRvfc = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+      const step = (now: number) => {
+        if (runRef.current !== run) return resolve(frames);
+        frames.push({ t: now, ...sample(ctx, video) });
+        if (now - t0 >= ms) return resolve(frames);
+        if (hasRvfc) video.requestVideoFrameCallback((n) => step(n));
+        else requestAnimationFrame(step);
+      };
+      if (hasRvfc) video.requestVideoFrameCallback((n) => step(n));
+      else requestAnimationFrame(step);
+    });
+
+  /** Tries every single (physical) lens with the finger held still, scores each, and keeps the best. */
+  const autoConfigure = async () => {
+    disposeCues();
+    cuesRef.current = createCues();
+    stopTracks();
+    const run = runRef.current;
+    setError(null);
+    setCalResults(null);
+    setPhase('calibrating');
+    try {
+      let found = lenses?.length ? lenses : await listBackLenses();
+      if (!found.length) {
+        const { stream } = await openCamera();
+        stream.getTracks().forEach((t) => t.stop());
+        found = await listBackLenses();
+      }
+      setLenses(found);
+      const candidates = found.some((l) => !l.virtual) ? found.filter((l) => !l.virtual) : found;
+      const results: CalResult[] = [];
+      for (const [index, l] of candidates.entries()) {
+        if (runRef.current !== run) return;
+        const step = { index, total: candidates.length, name: lensName(l.label) };
+        setCalStep({ ...step, stage: 'opening' });
+        let score: LensScore;
+        try {
+          const { stream, torch } = await openCamera(l);
+          if (runRef.current !== run) {
+            stream.getTracks().forEach((t) => t.stop());
+            return;
+          }
+          const { video, ctx } = await attach(stream);
+          setCalStep({ ...step, stage: 'settling' });
+          await wait(CAL_SETTLE_MS);
+          setCalStep({ ...step, stage: 'recording' });
+          const frames = await recordFor(video, ctx, CAL_RECORD_MS, run);
+          releaseStream();
+          score = scoreLensSample(frames, torch);
+        } catch (e) {
+          releaseStream();
+          score = scoreLensSample([], false);
+          score.reason = `could not open this lens (${e instanceof Error ? e.name : 'error'})`;
+        }
+        if (runRef.current !== run) return;
+        results.push({ lens: l, score });
+        setCalResults(rankLenses(results));
+        if (index < candidates.length - 1) cuesRef.current?.tick();
+      }
+      const best = rankLenses(results)[0];
+      if (best && best.score.score > 0) {
+        setLens(best.lens);
+        saveLens({ deviceId: best.lens.deviceId, label: best.lens.label });
+      }
+      cuesRef.current?.done();
+      setTimeout(disposeCues, 1500);
+      setCalStep(null);
+      setPhase('idle');
+    } catch (e) {
+      stopTracks();
+      disposeCues();
+      setCalStep(null);
+      setError(e instanceof Error ? `${e.name}: ${e.message}` : String(e));
+      setPhase('error');
+    }
+  };
+
   const pickLens = (l: Lens) => {
     setLens(l);
     saveLens({ deviceId: l.deviceId, label: l.label });
@@ -218,6 +323,7 @@ export default function PulseCapture() {
   const cancel = () => {
     stopTracks();
     disposeCues();
+    setCalStep(null);
     setPhase('idle');
     setElapsedS(0);
   };
@@ -376,9 +482,49 @@ export default function PulseCapture() {
             <span className="small">{lens ? lensName(lens.label) : 'Not chosen yet'}</span>
           </div>
           {phase === 'idle' && (
-            <button className="secondary" onClick={openPicker}>
-              {lens ? 'Change lens / check finger position' : 'Choose lens and check finger position'}
-            </button>
+            <>
+              <button onClick={autoConfigure}>Find best lens automatically</button>
+              <p className="muted small">
+                Hold your fingertip still over the flashlight and the lens next to it. The app tries each lens for about{' '}
+                {Math.round((CAL_SETTLE_MS + CAL_RECORD_MS) / 1000)} s, beeps between lenses, and keeps the one that picks up your pulse best.
+              </p>
+              <button className="secondary" onClick={openPicker}>
+                {lens ? 'Choose lens manually / check finger position' : 'Choose lens manually and check finger position'}
+              </button>
+            </>
+          )}
+          {phase === 'idle' && calResults && calResults.length > 0 && (
+            <div className="stack">
+              <h3>Lens test results</h3>
+              <table className="report-table">
+                <thead>
+                  <tr>
+                    <th>Lens</th>
+                    <th>Score</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {calResults.map(({ lens: l, score: s }, i) => (
+                    <tr key={l.deviceId}>
+                      <td>
+                        {i === 0 && s.score > 0 ? '★ ' : ''}
+                        {lensName(l.label)}
+                      </td>
+                      <td>{s.score}</td>
+                      <td className="small">
+                        {s.reason ?? `${s.beats} beats · flashlight ${s.torch ? 'on' : 'off'} · ${s.fps} fps`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="muted small">
+                {calResults[0].score.score > 0
+                  ? `Using ${lensName(calResults[0].lens.label)}. Scores apply to this finger position; rerun if you hold the phone differently.`
+                  : 'No lens picked up a pulse. Cover the flashlight and the lens beside it fully, keep still, and try again.'}
+              </p>
+            </div>
           )}
           {phase === 'preview' && lenses && (
             <>
@@ -406,7 +552,23 @@ export default function PulseCapture() {
         </div>
       )}
 
-      <video ref={videoRef} className="probe-video" playsInline muted autoPlay hidden={!(capturing || phase === 'preview')} />
+      {phase === 'calibrating' && (
+        <div className="card stack center">
+          <h2>Finding the best lens</h2>
+          <p className="countdown small-countdown">
+            {calStep ? calStep.index + 1 : '…'}
+            <span className="small muted"> / {calStep?.total ?? '…'}</span>
+          </p>
+          <p>
+            {calStep?.name ?? 'Listing lenses…'}
+            {calStep && ` · ${calStep.stage === 'recording' ? 'measuring' : calStep.stage === 'settling' ? 'settling' : 'opening'}`}
+          </p>
+          <p className="muted small">Keep your fingertip still over the flashlight and the lens next to it.</p>
+          <button className="secondary" onClick={cancel}>Cancel</button>
+        </div>
+      )}
+
+      <video ref={videoRef} className="probe-video" playsInline muted autoPlay hidden={!(capturing || phase === 'preview' || phase === 'calibrating')} />
       <canvas ref={canvasRef} hidden />
 
       {(phase === 'idle' || phase === 'preview') && (
