@@ -43,6 +43,10 @@ export const QUALITY_REASON_LABELS: Record<string, string> = {
   clipped: 'audio too loud (clipped)',
   noisy_room: 'room too noisy',
   face_lost: 'face not tracked',
+  too_quiet: 'blow not picked up',
+  late_start: 'slow start',
+  second_burst: 'second burst (e.g. a cough)',
+  processing_not_disabled: 'phone audio processing was on',
   too_dark: 'too dark',
 };
 
@@ -94,3 +98,19 @@ export const REPORT_SHARING_NOTE =
 export const REPORT_DISCUSS = 'Consider discussing this report with a clinician.';
 export const UNVALIDATED_SENSOR = (label: string) => `${label}: experimental phone-derived estimate, not validated against a medical device.`;
 export const EXPORT_NOTHING_SENT = 'Nothing is sent anywhere. Your browser opens its print dialog, where you can save a PDF.';
+
+// ---- Breathing experiment ----
+
+export const BREATH_RESULT = 'Audio experiment recorded';
+export const BREATH_NO_FLOW = 'The phone does not estimate a flow value. The only L/min shown is the reading you type in from the peak-flow meter.';
+export const BREATH_SAFETY = "Follow your peak-flow meter's own instructions. Stop right away if you feel unwell, dizzy or short of breath, or if you don't want to continue.";
+export const METER_LABEL = 'Peak-flow meter reading (typed in from the meter)';
+
+export const BREATH_TIPS: Record<string, string> = {
+  too_quiet: 'Blow hard and fast toward the phone, from the same marked distance.',
+  noisy_room: 'Find a quieter spot: no talking, music or fans nearby.',
+  late_start: 'Start the blow as one sharp burst, right after "Blow now".',
+  clipped: 'Hold the phone a little farther away, at the same distance each time.',
+  second_burst: 'Make it one continuous blow; if you cough, try again.',
+  processing_not_disabled: 'Phone audio processing could not be turned off; results may be less consistent.',
+};
