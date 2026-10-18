@@ -1,0 +1,54 @@
+@media print {
+  @page {
+    margin: 14mm 12mm;
+  }
+
+  :root {
+    --bg: #ffffff;
+    --fg: #000000;
+    --muted: #444444;
+    --border: #cccccc;
+    --card: #ffffff;
+    --accent: #0f766e;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+    font-size: 11pt;
+  }
+
+  .no-print,
+  .tabbar,
+  .shell-header,
+  .footer-link {
+    display: none !important;
+  }
+
+  .shell,
+  .shell-main {
+    padding: 0 !important;
+    max-width: none;
+  }
+
+  .report-section,
+  .report-header,
+  .report-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-section {
+    border: none;
+    border-top: 1px solid #999;
+    padding: 8px 0;
+  }
+
+  .report-demo-banner {
+    border: 2px solid #000;
+  }
+
+  .chart {
+    break-inside: avoid;
+  }
+}
