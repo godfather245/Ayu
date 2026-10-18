@@ -9,3 +9,4 @@ coverage
 # Research data stays off GitHub by default (anonymous or not)
 analysis/*.csv
 analysis/**/*.csv
+.firebase/
