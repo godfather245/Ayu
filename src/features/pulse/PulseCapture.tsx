@@ -8,7 +8,7 @@ import { nowIso } from '../../lib/dates';
 import { browserSummary, deviceSummary } from '../../lib/device';
 import { CAPTURE_SECONDS, HRV_METHOD, METHOD, THRESH, analyzeFrames, liveEstimate, type Frame, type LiveEstimate, type PulseResult } from './analyze';
 import { CAL_RECORD_MS, CAL_SETTLE_MS, rankLenses, scoreLensSample, type LensScore } from './calibrate';
-import { createCues, type Cues } from './cues';
+import { createCues, type Cues } from '../../lib/cues';
 import { lensName, listBackLenses, resolveLens, saveLens, type Lens } from './lens';
 
 // Lab experiment: 60 s fingertip-over-camera capture → experimental average pulse and HRV estimates.
